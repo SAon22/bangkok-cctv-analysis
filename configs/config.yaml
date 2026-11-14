@@ -1,0 +1,7 @@
+# Paths are relative to the repository root. No weights are bundled.
+paths:
+  raw_cctv: data/raw/cctv
+  raw_external: data/raw/external
+  interim: data/interim
+  processed: data/processed
+  model_weights: models/vehicle_detector.pt

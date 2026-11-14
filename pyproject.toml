@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bangkok-cctv"
+version = "0.1.0"
+description = "University project for Bangkok CCTV image analysis"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas", "numpy", "pyarrow", "opencv-python", "ultralytics",
+    "requests", "beautifulsoup4", "scipy", "scikit-learn",
+    "streamlit", "plotly", "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "jupyter"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
