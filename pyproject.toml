@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas", "numpy", "pyarrow", "opencv-python", "ultralytics",
     "requests", "beautifulsoup4", "scipy", "scikit-learn",
-    "streamlit", "plotly", "pyyaml",
+    "streamlit", "plotly", "pyyaml", "Pillow", "matplotlib",
 ]
 
 [project.optional-dependencies]
