@@ -28,3 +28,9 @@ data/raw/cctv_images.zip
 data/raw/cctv_info.csv
 
 data/raw/cctv_images/
+
+# AI Assistant Instructions & Project Context
+AGENTS.md
+**/AGENTS.md
+PROJECT_CONTEXT.md
+**/PROJECT_CONTEXT.md
