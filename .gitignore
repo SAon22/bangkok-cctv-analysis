@@ -22,3 +22,9 @@ models/*
 *.pth
 *.onnx
 *.weights
+
+# Original CCTV dataset archives and metadata
+data/raw/cctv_images.zip
+data/raw/cctv_info.csv
+
+data/raw/cctv_images/
