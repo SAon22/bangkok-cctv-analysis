@@ -316,3 +316,66 @@ def test_output_schema_rejects_inconsistent_results(tmp_path: Path, fault: str) 
         detections.loc[0, "camera_id"] = "other"
     with pytest.raises(ValueError):
         validate_outputs(sample, detections)
+
+
+@pytest.mark.parametrize("status,sampling_only,annotation_error,expected", [
+    ("skipped", True, None, "sampling_only"),
+    ("missing_file", True, None, "partial_failure"),
+    ("success", False, None, "complete"),
+    ("success", False, "OSError: annotation failed", "partial_failure"),
+    ("inference_error", False, None, "failed"),
+    ("unreadable", False, None, "failed"),
+])
+def test_summary_status_provenance_and_input_preservation(
+    tmp_path: Path, monkeypatch, status: str, sampling_only: bool,
+    annotation_error: str | None, expected: str,
+) -> None:
+    import hashlib
+    import json
+    from datetime import datetime
+    from importlib.metadata import PackageNotFoundError
+
+    from bangkok_cctv.engineering.yolo_feasibility import _build_summary
+
+    manifest = write_manifest(tmp_path, ["zero"])
+    sample = select_representative_sample(manifest, 1, 42)
+    sample["model_run_id"] = "fixed-run"
+    sample["status"] = status
+    sample["error_message"] = None if status == "success" else "explanation"
+    sample["annotation_error"] = annotation_error
+    sample["annotated_image_path"] = None
+    sample["total_vehicle_count"] = pd.Series(
+        [0 if status == "success" else pd.NA], dtype="Int64")
+    for field in ("runtime_seconds", "inference_seconds"):
+        sample[field] = pd.Series([pd.NA], dtype="Float64")
+    detections = detection_frame([])
+    original_sample, original_detections = sample.copy(deep=True), detections.copy(deep=True)
+    weights = tmp_path / "weights.pt"
+    weights.write_bytes(b"fixture weights; not loaded")
+    parameters = {"sampling_only": sampling_only, "sample_size": 1, "seed": 42}
+    monkeypatch.setattr("time.perf_counter", lambda: 100.0)
+    monkeypatch.setattr("importlib.metadata.version", Mock(side_effect=PackageNotFoundError))
+    summary = _build_summary(
+        sample, detections, manifest, root=tmp_path,
+        manifest_path=tmp_path / "data/interim/image_manifest.parquet",
+        weights=weights, parameters=parameters, model_error=None,
+        model_load_seconds=None, started=95.0,
+    )
+    assert summary["status"] == expected
+    assert summary["parameters"] == parameters
+    assert summary["model_run_id"] == "fixed-run"
+    assert summary["weights_sha256"] == (
+        None if sampling_only else hashlib.sha256(weights.read_bytes()).hexdigest())
+    assert summary["successful_images"] == int(status == "success")
+    assert summary["zero_detection_images"] == int(status == "success")
+    assert summary["failed_images"] == int(status not in {"success", "skipped"})
+    assert summary["annotation_errors"] == int(annotation_error is not None)
+    assert summary["runtime"]["elapsed_before_output_write_seconds"] == 5.0
+    assert summary["runtime"]["image_runtime_statistics"]["count"] == 0
+    assert summary["runtime"]["image_runtime_statistics"]["mean"] is None
+    assert all(value is None for value in summary["package_versions"].values())
+    assert datetime.fromisoformat(summary["created_at_utc"]).utcoffset().total_seconds() == 0
+    assert len(summary) == 31
+    json.dumps(summary, allow_nan=False)
+    pd.testing.assert_frame_equal(sample, original_sample)
+    pd.testing.assert_frame_equal(detections, original_detections)
