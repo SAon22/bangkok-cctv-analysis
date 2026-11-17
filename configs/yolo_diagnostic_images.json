@@ -1,0 +1,44 @@
+{
+  "images": [
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/1028/1028_แยกสะพานแดง_แยกสะพานแดง_20260830_131554.jpg",
+      "note": "Review candidate: visually apparent foreground motorcycle; confirm this example before inference.",
+      "nms": false
+    },
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/123/123_แยกรัชดา-ลาดพร้าว-ด้านถนนรัช_รถมาจากแยกรัชดา-สุทธิสาร_20260827_180049.jpg",
+      "note": "Suspected missed cars; high visual selection confidence: large overhead-view passenger cars are visible without saved boxes in a crowded late-afternoon scene. Not labelled ground truth.",
+      "nms": false
+    },
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/179/179_สะพานลอยหน้า-โรงพยาบาลพญาไท_รถมาจากอนุสาวรีย์ชัยสมรภูม_20260826_200117.jpg",
+      "note": "Suspected missed car; high visual selection confidence: a near-lane passenger vehicle is visible without a saved box at night, with headlight glare. Not labelled ground truth.",
+      "nms": false
+    },
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/1112/1112_แยกสุทธิสาร(ถนนวิภาวดีรังสิ_รถมาจากแยกรัชดา---สุทธิสาร_20260825_073056.jpg",
+      "note": "Suspected missed motorcycles; high visual selection confidence: unboxed moving motorcycles along the sunlit right lane, with strong morning backlighting. Not labelled ground truth.",
+      "nms": false
+    },
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/1071/1071_แยกกำแพงเพชร-ด้านถนนพหลโยธิ_รถมาจากแยกลาดพร้าว_20260829_093031.jpg",
+      "note": "Suspected missed motorcycles; high visual selection confidence: foreground parked scooters beside the flyover column are unboxed; daylight and partial occlusion. Not labelled ground truth.",
+      "nms": false
+    },
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/124/124_แยกรัชดา-ลาดพร้าว-ด้านถนนลาด_รถมาจากแยกโชคชัย-4_20260829_061551.jpg",
+      "note": "Suspected false-positive car; moderate visual selection confidence: the 0.40 car box appears to cover road or shadow, left of the moving motorcycles; dawn and blur. Manual review required.",
+      "nms": false
+    },
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/1039/1039_ใกล้สะพานนริศดำรัส-คลองมหาน_รถมุ่งหน้าไปแยกหลานหลวง_20260828_171009.jpg",
+      "note": "Suspected excess car prediction; high visual selection confidence: nested 0.64 and 0.25 boxes appear to cover the same foreground white vehicle. Requires manual object-to-box matching.",
+      "nms": false
+    },
+    {
+      "image_path": "data/raw/cctv_images/cctv_images/1132/1132_สะพานลอยหน้าวัดสุวรรณ-ตรงข้_รถมาจากแยกเจริญนครใต้_20260830_141618.jpg",
+      "note": "Reasonably detected control; moderate-high visual selection confidence: several daylight car boxes align with distinct vehicles at near and farther scales. Completeness is not asserted.",
+      "nms": false
+    }
+  ]
+}

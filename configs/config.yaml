@@ -4,4 +4,11 @@ paths:
   raw_external: data/raw/external
   interim: data/interim
   processed: data/processed
-  model_weights: models/vehicle_detector.pt
+  model_weights: models/yolov8n.pt
+
+# Step 5 only: raw detection outputs; cleaning/integration are future steps.
+detection:
+  manifest: data/interim/image_manifest.parquet
+  output_dir: data/interim/detection_pipeline
+  batch_size: 100
+  image_limit: null

@@ -226,6 +226,96 @@ def _coverage(frame: pd.DataFrame) -> dict[str, object]:
     }
 
 
+def _build_summary(
+    sample: pd.DataFrame, detections: pd.DataFrame, manifest: pd.DataFrame,
+    *, root: Path, manifest_path: Path, weights: Path,
+    parameters: dict[str, object], model_error: str | None,
+    model_load_seconds: float | None, started: float,
+) -> dict[str, object]:
+    """Describe the completed experiment without changing its result tables."""
+    import json
+    import time
+    from datetime import datetime, timezone
+    from importlib.metadata import PackageNotFoundError, version
+
+    from .vehicle_detector import COCO_VEHICLES
+
+    sampling_only = parameters["sampling_only"]
+    successful = sample["status"].eq("success")
+    failures = ~sample["status"].isin(["success", "skipped"])
+    annotation_failures = sample["annotation_error"].notna()
+    class_counts = {
+        name: int(detections["vehicle_class"].eq(name).sum())
+        for name in COCO_VEHICLES.values()
+    }
+    versions = {}
+    for package in ("pandas", "pyarrow", "Pillow", "ultralytics", "torch", "torchvision"):
+        try:
+            versions[package] = version(package)
+        except PackageNotFoundError:
+            versions[package] = None
+    def runtime_stats(field: str) -> dict[str, object]:
+        return json.loads(sample[field].dropna().astype(float).describe().to_json())
+    weight_hash = None
+    if not sampling_only and weights.is_file():
+        with weights.open("rb") as stream:
+            weight_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "model_run_id": sample.loc[0, "model_run_id"],
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "status": (
+            "sampling_only" if sampling_only and not failures.any()
+            else "failed" if not sampling_only and not successful.any()
+            else "partial_failure" if failures.any() or annotation_failures.any()
+            else "complete"
+        ),
+        "inference_executed": bool(sample["inference_seconds"].notna().any()),
+        "model_identifier": weights.name if not sampling_only else None,
+        "weights_path": (
+            weights.relative_to(root).as_posix()
+            if weights.is_relative_to(root) else str(weights)
+        ),
+        "weights_sha256": weight_hash,
+        "model_error": model_error,
+        "parameters": parameters,
+        "source_manifest": "data/interim/image_manifest.parquet",
+        "source_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "population_images": len(manifest),
+        "eligible_strata": int(manifest.assign(
+            date=manifest["timestamp"].dt.strftime("%Y-%m-%d").fillna("unknown"),
+            band=pd.cut(manifest["timestamp"].dt.hour, [-1, 10, 15, 23],
+                        labels=TIME_BANDS).astype("string").fillna("unknown")
+        ).groupby(["camera_id", "date", "band"], observed=True).ngroups),
+        "sample_coverage": _coverage(sample),
+        "status_counts": {str(k): int(v) for k, v in sample["status"].value_counts().items()},
+        "successful_images": int(successful.sum()),
+        "zero_detection_images": int((successful & sample["total_vehicle_count"].eq(0)).sum()),
+        "failed_images": int(failures.sum()),
+        "annotation_errors": int(annotation_failures.sum()),
+        "annotated_images": int(sample["annotated_image_path"].notna().sum()),
+        "detection_count": len(detections),
+        "per_class_detection_counts": class_counts,
+        "errors": sample.loc[failures, ["image_id", "image_path", "status", "error_message"]]
+            .to_dict(orient="records"),
+        "annotation_error_details": sample.loc[
+            annotation_failures, ["image_id", "image_path", "annotation_error"]
+        ].to_dict(orient="records"),
+        "runtime": {
+            "units": "seconds", "model_load_seconds": model_load_seconds,
+            "image_runtime_statistics": runtime_stats("runtime_seconds"),
+            "inference_runtime_statistics": runtime_stats("inference_seconds"),
+            "elapsed_before_output_write_seconds": time.perf_counter() - started,
+            "first_call_warmup_included": True,
+        },
+        "package_versions": versions,
+        "timestamp_timezone": "naive; unchanged filename clock time",
+        "limitations": LIMITATIONS,
+        "evaluation_metrics": None,
+        "evaluation_note": "No annotated ground truth; precision/recall/accuracy not measured.",
+    }
+
+
 def run_feasibility(
     project_root: Path, output_dir: Path, *, sample_size: int = 100,
     seed: int = 42, sampling_only: bool = False,
@@ -239,13 +329,10 @@ def run_feasibility(
     predictor is an injected test adapter. CLI runs always use the real detector.
     Existing nonempty output directories are refused to preserve earlier evidence.
     """
-    import hashlib
     import json
     import math
     import time
     import uuid
-    from datetime import datetime, timezone
-    from importlib.metadata import PackageNotFoundError, version
 
     from PIL import Image, ImageDraw
 
@@ -404,84 +491,17 @@ def run_feasibility(
 
     detections = detection_frame(records)
     validate_outputs(sample, detections)
-    successful = sample["status"].eq("success")
-    failures = ~sample["status"].isin(["success", "skipped"])
-    annotation_failures = sample["annotation_error"].notna()
-    class_counts = {
-        name: int(detections["vehicle_class"].eq(name).sum())
-        for name in COCO_VEHICLES.values()
-    }
-    versions = {}
-    for package in ("pandas", "pyarrow", "Pillow", "ultralytics", "torch", "torchvision"):
-        try:
-            versions[package] = version(package)
-        except PackageNotFoundError:
-            versions[package] = None
-    def runtime_stats(field: str) -> dict[str, object]:
-        return json.loads(sample[field].dropna().astype(float).describe().to_json())
-    weight_hash = None
-    if not sampling_only and weights.is_file():
-        with weights.open("rb") as stream:
-            weight_hash = hashlib.file_digest(stream, "sha256").hexdigest()
-    summary = {
-        "schema_version": SCHEMA_VERSION,
-        "model_run_id": sample.loc[0, "model_run_id"],
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "status": (
-            "sampling_only" if sampling_only and not failures.any()
-            else "failed" if not sampling_only and not successful.any()
-            else "partial_failure" if failures.any() or annotation_failures.any()
-            else "complete"
-        ),
-        "inference_executed": bool(sample["inference_seconds"].notna().any()),
-        "model_identifier": weights.name if not sampling_only else None,
-        "weights_path": (
-            weights.relative_to(root).as_posix()
-            if weights.is_relative_to(root) else str(weights)
-        ),
-        "weights_sha256": weight_hash,
-        "model_error": model_error,
-        "parameters": {
+    summary = _build_summary(
+        sample, detections, manifest, root=root, manifest_path=manifest_path,
+        weights=weights, model_error=model_error,
+        model_load_seconds=model_load_seconds, started=started,
+        parameters={
             "sample_size": sample_size, "seed": seed, "confidence": confidence,
             "image_size": image_size, "device": device, "iou": iou,
             "max_detections": max_detections, "sampling_only": sampling_only,
             "download_weights": download_weights,
         },
-        "source_manifest": "data/interim/image_manifest.parquet",
-        "source_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
-        "population_images": len(manifest),
-        "eligible_strata": int(manifest.assign(
-            date=manifest["timestamp"].dt.strftime("%Y-%m-%d").fillna("unknown"),
-            band=pd.cut(manifest["timestamp"].dt.hour, [-1, 10, 15, 23],
-                        labels=TIME_BANDS).astype("string").fillna("unknown")
-        ).groupby(["camera_id", "date", "band"], observed=True).ngroups),
-        "sample_coverage": _coverage(sample),
-        "status_counts": {str(k): int(v) for k, v in sample["status"].value_counts().items()},
-        "successful_images": int(successful.sum()),
-        "zero_detection_images": int((successful & sample["total_vehicle_count"].eq(0)).sum()),
-        "failed_images": int(failures.sum()),
-        "annotation_errors": int(annotation_failures.sum()),
-        "annotated_images": int(sample["annotated_image_path"].notna().sum()),
-        "detection_count": len(detections),
-        "per_class_detection_counts": class_counts,
-        "errors": sample.loc[failures, ["image_id", "image_path", "status", "error_message"]]
-            .to_dict(orient="records"),
-        "annotation_error_details": sample.loc[
-            annotation_failures, ["image_id", "image_path", "annotation_error"]
-        ].to_dict(orient="records"),
-        "runtime": {
-            "units": "seconds", "model_load_seconds": model_load_seconds,
-            "image_runtime_statistics": runtime_stats("runtime_seconds"),
-            "inference_runtime_statistics": runtime_stats("inference_seconds"),
-            "elapsed_before_output_write_seconds": time.perf_counter() - started,
-            "first_call_warmup_included": True,
-        },
-        "package_versions": versions,
-        "timestamp_timezone": "naive; unchanged filename clock time",
-        "limitations": LIMITATIONS,
-        "evaluation_metrics": None,
-        "evaluation_note": "No annotated ground truth; precision/recall/accuracy not measured.",
-    }
+    )
     sample.to_parquet(output_dir / "sample_manifest.parquet", index=False)
     detections.to_parquet(output_dir / "detections.parquet", index=False)
     (output_dir / "summary.json").write_text(
